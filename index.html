@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#20364a"><meta name="description" content="RelayForge Automation — local-first PLC engineering, deterministic simulation, and HMI design.">
+  <title>RelayForge Automation</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232080bd'/%3E%3Cpath d='M9 23V9h9a5 5 0 0 1 0 10H9m8 0 6 4' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="titlebar"><div class="brand-mark">R<span>F</span></div><div class="brand">RelayForge<span>AUTOMATION</span></div><div class="title-divider"></div><span id="projectTitle">Bottling_Cell</span><span class="title-extension">— Engineering workstation</span><div class="title-spacer"></div><span class="local-badge"><i></i> LOCAL SIMULATION</span><button class="title-help" data-command="help" title="Documentation and keyboard shortcuts">?</button></header>
+  <nav class="menubar" aria-label="Application menu"><div id="menus"></div><span class="menubar-note">PLC programming & HMI engineering</span></nav>
+  <div class="ribbon"><div class="ribbon-group" id="fileTools"></div><div class="ribbon-separator"></div><div class="ribbon-group" id="buildTools"></div><div class="ribbon-separator"></div><div class="ribbon-group" id="runTools"></div><div class="ribbon-separator"></div><div class="ribbon-group" id="viewTools"></div><div class="ribbon-spacer"></div><div id="cpuBadge" class="cpu-badge stopped"><span class="led"></span><b>CPU STOP</b><small>RF-1200 · virtual PLC</small></div></div>
+  <div class="workspace">
+    <aside class="project-pane"><div class="pane-caption"><span>Project tree</span><button data-command="project-settings" title="Project settings">⚙</button></div><div class="tree-search"><span>⌕</span><input id="treeSearch" aria-label="Filter project tree" placeholder="Search project…"><kbd>⌘ K</kbd></div><div id="projectTree" class="project-tree"></div><div class="project-footer"><div class="device-mini"><div class="cpu-mini"><i></i><i></i><i></i><span>RF</span></div><div><b>RF-1200 Virtual CPU</b><span>Deterministic · <strong id="cycleMini">20 ms</strong></span></div></div><div class="project-meta"><span>Project format</span><b>RelayForge 1.0</b></div><div class="project-meta"><span>Storage</span><b id="saveStatus">Local workspace</b></div></div></aside>
+    <div class="split-handle left-handle" data-resize="left"></div>
+    <main class="work-pane"><div id="documentTabs" class="document-tabs" role="tablist"></div><div class="document-heading"><div><div id="breadcrumb" class="breadcrumb"></div><h1 id="documentTitle">Main <span>[OB1]</span></h1></div><div id="documentMeta" class="document-meta"></div></div><div id="editorToolbar" class="editor-toolbar"></div><div id="editorArea" class="editor-area"></div><div class="bottom-resizer" data-resize="bottom"></div><section id="bottomPanel" class="bottom-panel"><div id="bottomTabs" class="bottom-tabs"></div><div id="bottomContent" class="bottom-content"></div></section></main>
+    <div class="split-handle right-handle" data-resize="right"></div>
+    <aside class="task-pane"><div class="task-tabs"><button id="instructionsTab" class="active">Instructions</button><button id="propertiesTab">Properties</button></div><div id="taskContent" class="task-content"></div><div class="io-panel"><div class="pane-caption"><span>SIMULATED I/O</span><label class="plant-switch" title="Deterministic demonstration process"><input type="checkbox" id="plantToggle" checked>Plant</label></div><div id="ioContent" class="io-content"></div><div class="io-caption">Changes apply at the next scan boundary.</div></div></aside>
+  </div>
+  <footer class="statusbar"><button id="mobileProject" data-command="toggle-project">☰</button><span id="statusConnection"><i class="status-dot"></i> Offline · simulator ready</span><span class="status-separator"></span><span id="compileStatus">Not compiled</span><span class="status-spacer"></span><span id="runtimeStats">Scan 0 · 0.000 s</span><span class="status-separator"></span><span id="rendererStatus">Initializing renderer…</span><span class="status-separator"></span><b>SIMULATION ONLY</b></footer>
+</div>
+<div id="toastArea" class="toast-area" aria-live="polite"></div><input type="file" id="projectFile" accept=".json,.relayforge,application/json" hidden><dialog id="dialog"></dialog>
+<script type="module" src="./src/app.js"></script>
+</body></html>
