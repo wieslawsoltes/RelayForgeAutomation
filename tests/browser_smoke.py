@@ -1,7 +1,16 @@
 """Optional browser integration test: pip install playwright; install Chromium separately."""
-import json,os
+import json,os,time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+
+def wait_js(page, expression, timeout=30000):
+    """Poll through CDP evaluation; do not invoke page-context eval under strict CSP."""
+    deadline = time.monotonic() + timeout / 1000
+    while time.monotonic() < deadline:
+        if page.evaluate("() => Boolean(" + expression + ")"):
+            return
+        page.wait_for_timeout(50)
+    raise AssertionError(f"Timed out waiting for JavaScript condition: {expression}")
 
 out=Path(os.environ.get('OUTPUT_DIR',Path(__file__).resolve().parents[1]/'test-results'));out.mkdir(parents=True,exist_ok=True)
 with sync_playwright() as p:
@@ -13,12 +22,12 @@ with sync_playwright() as p:
     page.on('pageerror', lambda e: errors.append(str(e)))
     page.on('console', lambda m: print('console:',m.type,m.text) if m.type=='error' else None)
     page.goto(os.environ.get('APP_URL','http://127.0.0.1:4173/'),wait_until='networkidle')
-    page.wait_for_function('window.relayforge && window.relayforge.compilation?.ok')
+    wait_js(page, 'window.relayforge && window.relayforge.compilation?.ok')
     page.wait_for_timeout(600)
     print('initial:',page.evaluate('({mode:relayforge.mode, renderer:relayforge.renderer, stats:relayforge.renderStats, compilation:relayforge.compilation.ok})'))
     page.screenshot(path=str(out/'relayforge-initial.png'),full_page=True)
     page.locator('#editorToolbar [data-command="start-demo"]').click()
-    page.wait_for_function('relayforge.snapshot.values.Motor === true', timeout=10000)
+    wait_js(page, 'relayforge.snapshot.values.Motor === true', timeout=10000)
     page.wait_for_timeout(400)
     print('running:',page.evaluate('({mode:relayforge.mode, scan:relayforge.snapshot.scan, outputs:relayforge.snapshot.outputs, level:relayforge.snapshot.values.TankLevel})'))
     page.screenshot(path=str(out/'relayforge-running.png'),full_page=True)
@@ -32,15 +41,15 @@ with sync_playwright() as p:
     page.wait_for_timeout(300)
     page.screenshot(path=str(out/'relayforge-hmi.png'),full_page=True)
     page.locator('.hmi-button button',has_text='STOP CYCLE').click()
-    page.wait_for_function('relayforge.snapshot.values.Motor === false')
+    wait_js(page, 'relayforge.snapshot.values.Motor === false')
     print('HMI stop:',page.evaluate('relayforge.snapshot.outputs'))
     page.locator('.hmi-button button',has_text='START CYCLE').click()
-    page.wait_for_function('relayforge.snapshot.values.Motor === true', timeout=10000)
+    wait_js(page, 'relayforge.snapshot.values.Motor === true', timeout=10000)
     page.evaluate("relayforge.command('pause')")
-    page.wait_for_function("relayforge.mode==='PAUSED'")
+    wait_js(page, "relayforge.mode==='PAUSED'")
     before=page.evaluate('relayforge.snapshot.scan')
     page.evaluate("relayforge.command('step')")
-    page.wait_for_function(f'relayforge.snapshot.scan === {before+1}')
+    wait_js(page, f'relayforge.snapshot.scan === {before+1}')
     page.evaluate("relayforge.navigate('traces')")
     page.wait_for_timeout(400)
     page.screenshot(path=str(out/'relayforge-traces.png'),full_page=True)
