@@ -1,0 +1,117 @@
+name: Test and deploy Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relayforge-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Test, build, publish and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+      - name: Run compiler and real worker tests
+        run: npm test
+      - name: Build static site and reproducible examples
+        run: node tools/build-site.mjs
+      - name: Install browser test dependencies
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Test the HTTP application with its real module worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node server.mjs > "$RUNNER_TEMP/relayforge-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          python tests/browser_smoke.py
+      - name: Read the existing Pages configuration
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/pages" > "$RUNNER_TEMP/pages.json"
+          jq '{build_type, html_url, source}' "$RUNNER_TEMP/pages.json"
+          type=$(jq -r '.build_type // "legacy"' "$RUNNER_TEMP/pages.json")
+          branch=$(jq -r '.source.branch // ""' "$RUNNER_TEMP/pages.json")
+          path=$(jq -r '.source.path // "/"' "$RUNNER_TEMP/pages.json")
+          url=$(jq -r '.html_url' "$RUNNER_TEMP/pages.json")
+          if [[ "$type" == 'workflow' || "$branch" == 'main' ]]; then
+            echo 'method=artifact' >> "$GITHUB_OUTPUT"
+          elif [[ "$branch" == 'gh-pages' && "$path" == '/' ]]; then
+            echo 'method=branch' >> "$GITHUB_OUTPUT"
+          else
+            echo '::error::Select GitHub Actions or gh-pages / (root) in Settings > Pages.'
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Upload the Pages artifact
+        if: steps.pages.outputs.method == 'artifact'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy the Pages artifact
+        if: steps.pages.outputs.method == 'artifact'
+        uses: actions/deploy-pages@v4
+      - name: Publish to the configured gh-pages branch
+        if: steps.pages.outputs.method == 'branch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages
+          target="$RUNNER_TEMP/relayforge-published"
+          git worktree add --detach "$target" origin/gh-pages
+          rsync -a --delete --exclude=.git _site/ "$target/"
+          git -C "$target" config user.name 'github-actions[bot]'
+          git -C "$target" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C "$target" add --all
+          if ! git -C "$target" diff --cached --quiet; then
+            git -C "$target" commit -m "deploy: RelayForge ${GITHUB_SHA:0:12}"
+            git -C "$target" push origin HEAD:gh-pages
+          fi
+          # GITHUB_TOKEN pushes do not trigger automatic Pages builds.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+      - name: Verify the published revision, every file hash and module MIME types
+        env:
+          SITE_URL: ${{ steps.pages.outputs.url }}
+        run: node tools/verify-site.mjs "$SITE_URL"
+      - name: Deployment summary
+        env:
+          SITE_URL: ${{ steps.pages.outputs.url }}
+        run: |
+          {
+            echo '## RelayForge Automation deployed'
+            echo "Site: $SITE_URL"
+            echo "Source revision: $GITHUB_SHA"
+            echo 'Passed: Node compiler/runtime/worker tests, HTTP browser integration, deterministic example, live file SHA-256 and JavaScript MIME verification.'
+          } >> "$GITHUB_STEP_SUMMARY"
